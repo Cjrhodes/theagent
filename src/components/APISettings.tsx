@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { settingsService, SettingData } from '../services/settingsService';
+import { clearAPIKeyCache } from '../services/configWithDB';
 import {
   Card,
   CardContent,
@@ -123,27 +125,62 @@ const APISettings: React.FC = () => {
   const loadAPIStatus = useCallback(async () => {
     setLoading(true);
     
-    // Load actual API key/account info status from localStorage
-    const servicesArray: APIService[] = [];
-    
-    Object.entries(serviceCategories).forEach(([category, categoryInfo]) => {
-      Object.entries(categoryInfo.services).forEach(([serviceName, description]) => {
-        // Check if data exists in localStorage (API key or account info)
-        const data = localStorage.getItem(`apiKey_${serviceName.replace(/\s+/g, '_')}`);
-        const isConfigured = !!(data && data.length > 0);
-        
-        servicesArray.push({
-          name: serviceName,
-          category,
-          description: description as string,
-          status: isConfigured ? 'connected' : 'disconnected',
-          enabled: isConfigured,
-          configured: isConfigured
+    try {
+      // Load all settings from database
+      const dbSettings = await settingsService.getSettings() as SettingData[];
+      const settingsMap = new Map(dbSettings.map(s => [s.service_name, s]));
+      
+      const servicesArray: APIService[] = [];
+      
+      Object.entries(serviceCategories).forEach(([category, categoryInfo]) => {
+        Object.entries(categoryInfo.services).forEach(([serviceName, description]) => {
+          // Check database first, then localStorage fallback
+          const dbSetting = settingsMap.get(serviceName);
+          const localData = localStorage.getItem(`apiKey_${serviceName.replace(/\s+/g, '_')}`);
+          
+          const isConfigured = !!(
+            (dbSetting?.api_key && dbSetting.api_key.trim()) ||
+            (localData && localData.trim())
+          );
+          
+          servicesArray.push({
+            name: serviceName,
+            category,
+            description: description as string,
+            status: isConfigured ? 'connected' : 'disconnected',
+            enabled: isConfigured,
+            configured: isConfigured
+          });
         });
       });
-    });
+      
+      setServices(servicesArray);
+    } catch (error) {
+      console.error('Failed to load settings from database:', error);
+      showSnackbar('Failed to load settings. Using local storage.', 'warning');
+      
+      // Fallback to localStorage only
+      const servicesArray: APIService[] = [];
+      
+      Object.entries(serviceCategories).forEach(([category, categoryInfo]) => {
+        Object.entries(categoryInfo.services).forEach(([serviceName, description]) => {
+          const data = localStorage.getItem(`apiKey_${serviceName.replace(/\s+/g, '_')}`);
+          const isConfigured = !!(data && data.length > 0);
+          
+          servicesArray.push({
+            name: serviceName,
+            category,
+            description: description as string,
+            status: isConfigured ? 'connected' : 'disconnected',
+            enabled: isConfigured,
+            configured: isConfigured
+          });
+        });
+      });
+      
+      setServices(servicesArray);
+    }
     
-    setServices(servicesArray);
     setLoading(false);
   }, []);
 
@@ -163,21 +200,37 @@ const APISettings: React.FC = () => {
     
     if (apiKey.trim()) {
       try {
-        // Save API key to localStorage
-        const keyName = `apiKey_${configDialog.service.replace(/\s+/g, '_')}`;
-        localStorage.setItem(keyName, apiKey.trim());
-        
-        // Save additional config if any
-        if (Object.keys(additionalConfig).length > 0) {
-          const configName = `config_${configDialog.service.replace(/\s+/g, '_')}`;
-          localStorage.setItem(configName, JSON.stringify(additionalConfig));
-        }
-        
-        // Test/validate the input (API key or username)
+        // Test/validate the input first
         await testAPIKey(configDialog.service, apiKey.trim());
         
-        const isSocialMedia = ['Instagram', 'Facebook', 'Twitter / X', 'Threads', 'TikTok', 'Bluesky'].includes(configDialog.service);
-        showSnackbar(`${configDialog.service} ${isSocialMedia ? 'account info saved' : 'configured'} successfully!`, 'success');
+        // Save to database
+        try {
+          await settingsService.saveSettings(
+            configDialog.service,
+            apiKey.trim(),
+            Object.keys(additionalConfig).length > 0 ? additionalConfig : undefined
+          );
+          
+          // Clear cache to force refresh
+          clearAPIKeyCache();
+          
+          const isSocialMedia = ['Instagram', 'Facebook', 'Twitter / X', 'Threads', 'TikTok', 'Bluesky'].includes(configDialog.service);
+          showSnackbar(`${configDialog.service} ${isSocialMedia ? 'account info saved' : 'configured'} successfully in database!`, 'success');
+          
+        } catch (dbError) {
+          console.warn('Database save failed, falling back to localStorage:', dbError);
+          
+          // Fallback to localStorage
+          const keyName = `apiKey_${configDialog.service.replace(/\s+/g, '_')}`;
+          localStorage.setItem(keyName, apiKey.trim());
+          
+          if (Object.keys(additionalConfig).length > 0) {
+            const configName = `config_${configDialog.service.replace(/\s+/g, '_')}`;
+            localStorage.setItem(configName, JSON.stringify(additionalConfig));
+          }
+          
+          showSnackbar(`${configDialog.service} saved locally (database unavailable)`, 'warning');
+        }
         setConfigDialog({ open: false, service: '', category: '' });
         
         // Update services array to show as connected
@@ -581,10 +634,10 @@ const APISettings: React.FC = () => {
             
             {renderAdditionalConfigFields()}
             
-            <Alert severity="info" sx={{ mt: 2 }}>
+            <Alert severity="warning" sx={{ mt: 2 }}>
               {['Instagram', 'Facebook', 'Twitter / X', 'Threads', 'TikTok', 'Bluesky'].includes(configDialog.service) 
-                ? 'Account information is stored locally for reference. Posting is handled through Ayrshare - make sure to connect your accounts there first.'
-                : 'API keys are encrypted and stored securely. Never share your keys with anyone.'
+                ? 'Note: Account info may not persist on Vercel. Consider setting REACT_APP_[PLATFORM]_USERNAME environment variables instead.'
+                : 'API keys are encrypted and stored securely. For Vercel deployment, use environment variables for better reliability.'
               }
             </Alert>
           </Box>
