@@ -157,7 +157,7 @@ const APISettings: React.FC = () => {
       setServices(servicesArray);
     } catch (error) {
       console.error('Failed to load settings from database:', error);
-      showSnackbar('Failed to load settings. Using local storage.', 'warning');
+      showSnackbar('DB connection not available, using local storage', 'warning');
       
       // Fallback to localStorage only
       const servicesArray: APIService[] = [];
@@ -215,7 +215,7 @@ const APISettings: React.FC = () => {
           clearAPIKeyCache();
           
           const isSocialMedia = ['Instagram', 'Facebook', 'Twitter / X', 'Threads', 'TikTok', 'Bluesky'].includes(configDialog.service);
-          showSnackbar(`${configDialog.service} ${isSocialMedia ? 'account info saved' : 'configured'} successfully in database!`, 'success');
+          showSnackbar(`${configDialog.service} ${isSocialMedia ? 'account info saved' : 'configured'} successfully!`, 'success');
           
         } catch (dbError) {
           console.warn('Database save failed, falling back to localStorage:', dbError);
@@ -231,6 +231,7 @@ const APISettings: React.FC = () => {
           
           showSnackbar(`${configDialog.service} saved locally (database unavailable)`, 'warning');
         }
+        
         setConfigDialog({ open: false, service: '', category: '' });
         
         // Update services array to show as connected
@@ -634,10 +635,10 @@ const APISettings: React.FC = () => {
             
             {renderAdditionalConfigFields()}
             
-            <Alert severity="warning" sx={{ mt: 2 }}>
+            <Alert severity="info" sx={{ mt: 2 }}>
               {['Instagram', 'Facebook', 'Twitter / X', 'Threads', 'TikTok', 'Bluesky'].includes(configDialog.service) 
-                ? 'Note: Account info may not persist on Vercel. Consider setting REACT_APP_[PLATFORM]_USERNAME environment variables instead.'
-                : 'API keys are encrypted and stored securely. For Vercel deployment, use environment variables for better reliability.'
+                ? 'Account information is saved to file storage with localStorage fallback. Posting is handled through Ayrshare - make sure to connect your accounts there first.'
+                : 'API keys are saved to file storage with localStorage fallback. Never share your keys with anyone.'
               }
             </Alert>
           </Box>
