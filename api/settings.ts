@@ -6,40 +6,43 @@ function getSupabaseClient() {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   
+  console.log('Supabase URL present:', !!supabaseUrl);
+  console.log('Supabase Key present:', !!supabaseKey);
+  
   if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Missing Supabase environment variables');
+    throw new Error(`Missing Supabase environment variables: URL=${!!supabaseUrl}, Key=${!!supabaseKey}`);
   }
   
   return createClient(supabaseUrl, supabaseKey);
 }
 
-// Initialize database table
-export async function initializeDatabase() {
+// Test database connection
+export async function testDatabaseConnection() {
   try {
     const supabase = getSupabaseClient();
     
-    // Create table using Supabase SQL
-    const { error } = await supabase.rpc('execute_sql', {
-      query: `
-        CREATE TABLE IF NOT EXISTS user_settings (
-          id BIGSERIAL PRIMARY KEY,
-          user_id VARCHAR(255) DEFAULT 'default_user',
-          service_name VARCHAR(255) NOT NULL,
-          api_key TEXT,
-          additional_config JSONB,
-          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-          UNIQUE(user_id, service_name)
-        )
-      `
-    });
+    // Simple test query to check if the table exists
+    const { data, error } = await supabase
+      .from('user_settings')
+      .select('count', { count: 'exact', head: true });
     
     if (error) {
-      console.error('Database initialization error:', error);
+      console.error('Database connection test failed:', error);
+      return false;
     }
+    
+    console.log('Database connection successful');
+    return true;
   } catch (error) {
-    console.error('Database initialization error:', error);
+    console.error('Database connection test error:', error);
+    return false;
   }
+}
+
+// Initialize database table (simplified)
+export async function initializeDatabase() {
+  // Skip initialization since table is manually created
+  return testDatabaseConnection();
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -68,13 +71,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
-  try {
-    // Initialize database on first request
-    await initializeDatabase();
-  } catch (dbError) {
-    console.error('Database initialization failed:', dbError);
+  // Test database connection
+  const dbConnected = await initializeDatabase();
+  if (!dbConnected) {
+    console.error('Database connection failed, API will return error responses');
     return res.status(500).json({ 
-      error: 'Database connection failed. Please check your Vercel Postgres configuration.' 
+      error: 'Database connection failed. Please check your Supabase configuration.' 
     });
   }
 
