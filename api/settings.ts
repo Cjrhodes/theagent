@@ -1,21 +1,42 @@
-import { sql } from '@vercel/postgres';
 import { VercelRequest, VercelResponse } from '@vercel/node';
+import { createClient } from '@supabase/supabase-js';
+
+// Initialize Supabase client
+function getSupabaseClient() {
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Missing Supabase environment variables');
+  }
+  
+  return createClient(supabaseUrl, supabaseKey);
+}
 
 // Initialize database table
 export async function initializeDatabase() {
   try {
-    await sql`
-      CREATE TABLE IF NOT EXISTS user_settings (
-        id SERIAL PRIMARY KEY,
-        user_id VARCHAR(255) DEFAULT 'default_user',
-        service_name VARCHAR(255) NOT NULL,
-        api_key TEXT,
-        additional_config JSONB,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(user_id, service_name)
-      )
-    `;
+    const supabase = getSupabaseClient();
+    
+    // Create table using Supabase SQL
+    const { error } = await supabase.rpc('execute_sql', {
+      query: `
+        CREATE TABLE IF NOT EXISTS user_settings (
+          id BIGSERIAL PRIMARY KEY,
+          user_id VARCHAR(255) DEFAULT 'default_user',
+          service_name VARCHAR(255) NOT NULL,
+          api_key TEXT,
+          additional_config JSONB,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(user_id, service_name)
+        )
+      `
+    });
+    
+    if (error) {
+      console.error('Database initialization error:', error);
+    }
   } catch (error) {
     console.error('Database initialization error:', error);
   }
@@ -33,10 +54,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // Check for required environment variables
-  if (!process.env.POSTGRES_URL && !process.env.POSTGRES_PRISMA_URL && !process.env.POSTGRES_URL_NON_POOLING) {
-    console.error('Missing required database environment variables');
+  if (!process.env.SUPABASE_URL && !process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    console.error('Missing required Supabase URL environment variable');
     return res.status(500).json({ 
-      error: 'Database configuration missing. Please configure Vercel Postgres environment variables.' 
+      error: 'Database configuration missing. Please configure Supabase environment variables.' 
+    });
+  }
+  
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.error('Missing required Supabase service role key');
+    return res.status(500).json({ 
+      error: 'Database configuration missing. Please configure Supabase service role key.' 
     });
   }
 
@@ -56,28 +84,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   switch (method) {
     case 'GET':
       try {
+        const supabase = getSupabaseClient();
         const { service } = req.query;
         
         if (service) {
           // Get specific service
-          const result = await sql`
-            SELECT * FROM user_settings 
-            WHERE user_id = ${userId} AND service_name = ${service as string}
-          `;
+          const { data, error } = await supabase
+            .from('user_settings')
+            .select('*')
+            .eq('user_id', userId)
+            .eq('service_name', service as string)
+            .single();
           
-          if (result.rows.length === 0) {
+          if (error && error.code === 'PGRST116') {
             return res.status(404).json({ error: 'Service not found' });
           }
           
-          return res.status(200).json(result.rows[0]);
+          if (error) {
+            throw error;
+          }
+          
+          return res.status(200).json(data);
         } else {
           // Get all services
-          const result = await sql`
-            SELECT * FROM user_settings 
-            WHERE user_id = ${userId}
-          `;
+          const { data, error } = await supabase
+            .from('user_settings')
+            .select('*')
+            .eq('user_id', userId);
           
-          return res.status(200).json(result.rows);
+          if (error) {
+            throw error;
+          }
+          
+          return res.status(200).json(data || []);
         }
       } catch (error) {
         console.error('Get settings error:', error);
@@ -86,6 +125,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     case 'POST':
       try {
+        const supabase = getSupabaseClient();
         const { serviceName, apiKey, additionalConfig } = req.body;
         
         if (!serviceName) {
@@ -93,20 +133,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         // Upsert (insert or update)
-        const result = await sql`
-          INSERT INTO user_settings (user_id, service_name, api_key, additional_config, updated_at)
-          VALUES (${userId}, ${serviceName}, ${apiKey || ''}, ${JSON.stringify(additionalConfig || {})}, CURRENT_TIMESTAMP)
-          ON CONFLICT (user_id, service_name) 
-          DO UPDATE SET 
-            api_key = EXCLUDED.api_key,
-            additional_config = EXCLUDED.additional_config,
-            updated_at = CURRENT_TIMESTAMP
-          RETURNING *
-        `;
+        const { data, error } = await supabase
+          .from('user_settings')
+          .upsert({
+            user_id: userId,
+            service_name: serviceName,
+            api_key: apiKey || '',
+            additional_config: additionalConfig || {},
+            updated_at: new Date().toISOString()
+          }, {
+            onConflict: 'user_id,service_name'
+          })
+          .select()
+          .single();
+        
+        if (error) {
+          throw error;
+        }
         
         return res.status(200).json({ 
           success: true, 
-          data: result.rows[0],
+          data: data,
           message: 'Settings saved successfully'
         });
       } catch (error) {
@@ -116,16 +163,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     case 'DELETE':
       try {
+        const supabase = getSupabaseClient();
         const { service } = req.query;
         
         if (!service) {
           return res.status(400).json({ error: 'Service name is required' });
         }
 
-        await sql`
-          DELETE FROM user_settings 
-          WHERE user_id = ${userId} AND service_name = ${service as string}
-        `;
+        const { error } = await supabase
+          .from('user_settings')
+          .delete()
+          .eq('user_id', userId)
+          .eq('service_name', service as string);
+        
+        if (error) {
+          throw error;
+        }
         
         return res.status(200).json({ success: true, message: 'Settings deleted' });
       } catch (error) {
