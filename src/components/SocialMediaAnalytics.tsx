@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card,
   CardContent,
@@ -20,8 +20,7 @@ import {
   Refresh,
 } from '@mui/icons-material';
 import { PieChart, Pie, Cell, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip, LineChart, Line } from 'recharts';
-import { getSocialAccount } from '../config/socialAccounts';
-import { ayrshareService, type SocialPlatformData } from '../services/ayrshareService';
+import { ayrshareService } from '../services/ayrshareService';
 
 interface SocialPlatform {
   name: string;
@@ -74,7 +73,7 @@ const SocialMediaAnalytics: React.FC = () => {
     }
   };
 
-  const loadSocialData = async () => {
+  const loadSocialData = useCallback(async () => {
     setLoading(true);
     try {
       const socialData = await ayrshareService.getSocialAnalytics();
@@ -110,11 +109,11 @@ const SocialMediaAnalytics: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadSocialData();
-  }, []);
+  }, [loadSocialData]);
 
   const refreshData = async () => {
     await loadSocialData();
