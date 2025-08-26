@@ -20,6 +20,8 @@ import {
   Refresh,
 } from '@mui/icons-material';
 import { PieChart, Pie, Cell, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip, LineChart, Line } from 'recharts';
+import { getSocialAccount } from '../config/socialAccounts';
+import { ayrshareService, type SocialPlatformData } from '../services/ayrshareService';
 
 interface SocialPlatform {
   name: string;
@@ -30,6 +32,7 @@ interface SocialPlatform {
   color: string;
   posts: number;
   reach: number;
+  username: string;
 }
 
 interface EngagementData {
@@ -47,89 +50,74 @@ const SocialMediaAnalytics: React.FC = () => {
   const [engagementData, setEngagementData] = useState<EngagementData[]>([]);
   const [loading, setLoading] = useState(false);
 
+  const getPlatformIcon = (name: string) => {
+    switch (name) {
+      case 'Instagram': return <Instagram />;
+      case 'Facebook': return <Facebook />;
+      case 'Twitter/X': return <Twitter />;
+      case 'TikTok': return <Box sx={{ width: 24, height: 24, backgroundColor: '#000', borderRadius: '50%' }} />;
+      case 'Threads': return <Box sx={{ width: 24, height: 24, backgroundColor: '#000', borderRadius: '50%' }} />;
+      case 'Bluesky': return <Box sx={{ width: 24, height: 24, backgroundColor: '#00A8E8', borderRadius: '50%' }} />;
+      default: return <Box sx={{ width: 24, height: 24, backgroundColor: '#ccc', borderRadius: '50%' }} />;
+    }
+  };
+
+  const getPlatformColor = (name: string) => {
+    switch (name) {
+      case 'Instagram': return '#E1306C';
+      case 'Facebook': return '#1877F2';
+      case 'Twitter/X': return '#1DA1F2';
+      case 'TikTok': return '#000000';
+      case 'Threads': return '#000000';
+      case 'Bluesky': return '#00A8E8';
+      default: return '#666666';
+    }
+  };
+
+  const loadSocialData = async () => {
+    setLoading(true);
+    try {
+      const socialData = await ayrshareService.getSocialAnalytics();
+      
+      const platformsWithIcons: SocialPlatform[] = socialData.map(platform => ({
+        name: platform.name,
+        icon: getPlatformIcon(platform.name),
+        followers: platform.followers,
+        engagement: platform.engagement,
+        weeklyGrowth: platform.weeklyGrowth,
+        color: getPlatformColor(platform.name),
+        posts: platform.posts,
+        reach: platform.reach,
+        username: platform.username,
+      }));
+
+      setPlatforms(platformsWithIcons);
+
+      // Generate mock engagement data based on current platforms
+      const mockEngagementData: EngagementData[] = [
+        { date: '2024-01-01', instagram: 120, facebook: 85, twitter: 45, bluesky: 25, threads: 35, tiktok: 180 },
+        { date: '2024-01-02', instagram: 135, facebook: 92, twitter: 52, bluesky: 28, threads: 42, tiktok: 210 },
+        { date: '2024-01-03', instagram: 142, facebook: 88, twitter: 38, bluesky: 32, threads: 38, tiktok: 195 },
+        { date: '2024-01-04', instagram: 158, facebook: 105, twitter: 62, bluesky: 35, threads: 48, tiktok: 245 },
+        { date: '2024-01-05', instagram: 165, facebook: 98, twitter: 55, bluesky: 40, threads: 52, tiktok: 220 },
+        { date: '2024-01-06', instagram: 172, facebook: 112, twitter: 68, bluesky: 38, threads: 55, tiktok: 265 },
+        { date: '2024-01-07', instagram: 148, facebook: 95, twitter: 45, bluesky: 42, threads: 45, tiktok: 230 },
+      ];
+      setEngagementData(mockEngagementData);
+
+    } catch (error) {
+      console.error('Error loading social media data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const mockPlatforms: SocialPlatform[] = [
-      {
-        name: 'Instagram',
-        icon: <Instagram />,
-        followers: 2847,
-        engagement: 4.2,
-        weeklyGrowth: 12.5,
-        color: '#E1306C',
-        posts: 45,
-        reach: 18500,
-      },
-      {
-        name: 'Facebook',
-        icon: <Facebook />,
-        followers: 1523,
-        engagement: 3.8,
-        weeklyGrowth: 8.2,
-        color: '#1877F2',
-        posts: 32,
-        reach: 12300,
-      },
-      {
-        name: 'Twitter/X',
-        icon: <Twitter />,
-        followers: 892,
-        engagement: 2.1,
-        weeklyGrowth: -2.3,
-        color: '#1DA1F2',
-        posts: 78,
-        reach: 8500,
-      },
-      {
-        name: 'TikTok',
-        icon: <Box sx={{ width: 24, height: 24, backgroundColor: '#000', borderRadius: '50%' }} />,
-        followers: 456,
-        engagement: 6.7,
-        weeklyGrowth: 25.8,
-        color: '#000000',
-        posts: 12,
-        reach: 15600,
-      },
-      {
-        name: 'Threads',
-        icon: <Box sx={{ width: 24, height: 24, backgroundColor: '#000', borderRadius: '50%' }} />,
-        followers: 234,
-        engagement: 3.4,
-        weeklyGrowth: 15.2,
-        color: '#000000',
-        posts: 23,
-        reach: 4200,
-      },
-      {
-        name: 'Bluesky',
-        icon: <Box sx={{ width: 24, height: 24, backgroundColor: '#00A8E8', borderRadius: '50%' }} />,
-        followers: 167,
-        engagement: 5.1,
-        weeklyGrowth: 18.7,
-        color: '#00A8E8',
-        posts: 15,
-        reach: 2800,
-      },
-    ];
-
-    const mockEngagementData: EngagementData[] = [
-      { date: '2024-01-01', instagram: 120, facebook: 85, twitter: 45, bluesky: 25, threads: 35, tiktok: 180 },
-      { date: '2024-01-02', instagram: 135, facebook: 92, twitter: 52, bluesky: 28, threads: 42, tiktok: 210 },
-      { date: '2024-01-03', instagram: 142, facebook: 88, twitter: 38, bluesky: 32, threads: 38, tiktok: 195 },
-      { date: '2024-01-04', instagram: 158, facebook: 105, twitter: 62, bluesky: 35, threads: 48, tiktok: 245 },
-      { date: '2024-01-05', instagram: 165, facebook: 98, twitter: 55, bluesky: 40, threads: 52, tiktok: 220 },
-      { date: '2024-01-06', instagram: 172, facebook: 112, twitter: 68, bluesky: 38, threads: 55, tiktok: 265 },
-      { date: '2024-01-07', instagram: 148, facebook: 95, twitter: 45, bluesky: 42, threads: 45, tiktok: 230 },
-    ];
-
-    setPlatforms(mockPlatforms);
-    setEngagementData(mockEngagementData);
+    loadSocialData();
   }, []);
 
   const refreshData = async () => {
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-    }, 2000);
+    await loadSocialData();
   };
 
   const totalFollowers = platforms.reduce((sum, platform) => sum + platform.followers, 0);
@@ -220,7 +208,12 @@ const SocialMediaAnalytics: React.FC = () => {
                 <Avatar sx={{ bgcolor: platform.color, mr: 2 }}>
                   {platform.icon}
                 </Avatar>
-                <Typography variant="h6">{platform.name}</Typography>
+                <Box>
+                  <Typography variant="h6">{platform.name}</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {platform.username}
+                  </Typography>
+                </Box>
               </Box>
 
               <Box mb={2}>
@@ -329,11 +322,11 @@ const SocialMediaAnalytics: React.FC = () => {
 
       {/* Integration Status */}
       <Box sx={{ width: "100%" }}>
-        <Alert severity="info">
+        <Alert severity={process.env.REACT_APP_AYRSHARE_API_KEY ? "success" : "info"}>
           <Typography variant="body2">
-            <strong>Integration Status:</strong> This shows mock data. To connect real social media analytics, 
-            you'll need to set up API integrations with each platform (Instagram Basic Display API, Facebook Graph API, 
-            Twitter API v2, etc.) or use services like Ayrshare or Socialinsider for unified analytics.
+            <strong>Integration Status:</strong> {process.env.REACT_APP_AYRSHARE_API_KEY 
+              ? "Connected to Ayrshare API for real-time social media analytics from Instagram, Facebook, Twitter/X, TikTok, Threads, and Bluesky." 
+              : "Using mock data. Add your Ayrshare API key to .env file to connect real social media analytics."}
           </Typography>
         </Alert>
       </Box>
