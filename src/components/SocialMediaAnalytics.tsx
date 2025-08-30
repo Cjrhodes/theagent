@@ -123,7 +123,7 @@ const SocialMediaAnalytics: React.FC = () => {
   const avgEngagement = platforms.reduce((sum, platform) => sum + platform.engagement, 0) / platforms.length;
 
   const pieData = platforms.map(platform => ({
-    name: platform.name,
+    name: `${platform.name} (${platform.username})`,
     value: platform.followers,
     color: platform.color,
   }));
@@ -132,9 +132,14 @@ const SocialMediaAnalytics: React.FC = () => {
     <Box sx={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
       <Box sx={{ width: "100%" }}>
         <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-          <Typography variant="h5" component="h2">
-            Social Media Analytics
-          </Typography>
+          <Box>
+            <Typography variant="h5" component="h2">
+              Social Media Analytics
+            </Typography>
+            <Typography variant="body2" color="text.secondary" mt={0.5}>
+              Tracking: {platforms.map(p => p.username).join(' • ')}
+            </Typography>
+          </Box>
           <Button
             variant="outlined"
             startIcon={<Refresh />}
@@ -207,10 +212,13 @@ const SocialMediaAnalytics: React.FC = () => {
                 <Avatar sx={{ bgcolor: platform.color, mr: 2 }}>
                   {platform.icon}
                 </Avatar>
-                <Box>
+                <Box sx={{ flex: 1 }}>
                   <Typography variant="h6">{platform.name}</Typography>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="subtitle1" fontWeight="bold" color="primary">
                     {platform.username}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Account Analytics
                   </Typography>
                 </Box>
               </Box>
