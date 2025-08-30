@@ -333,8 +333,13 @@ const SocialMediaAnalytics: React.FC = () => {
           <Typography variant="body2">
             <strong>Integration Status:</strong> {process.env.REACT_APP_AYRSHARE_API_KEY 
               ? "Connected to Ayrshare API for real-time social media analytics from Instagram, Facebook, Twitter/X, TikTok, Threads, and Bluesky." 
-              : "Using mock data. Add your Ayrshare API key to .env file to connect real social media analytics."}
+              : "Using mock data. Add REACT_APP_AYRSHARE_API_KEY to Vercel environment variables to connect real social media analytics."}
           </Typography>
+          {process.env.NODE_ENV === 'development' && (
+            <Typography variant="caption" display="block" mt={1}>
+              Debug: API Key {process.env.REACT_APP_AYRSHARE_API_KEY ? 'found' : 'not found'}
+            </Typography>
+          )}
         </Alert>
       </Box>
     </Box>
